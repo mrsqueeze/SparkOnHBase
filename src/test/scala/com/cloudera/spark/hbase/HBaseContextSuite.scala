@@ -22,6 +22,9 @@ class HBaseContextSuite extends FunSuite with LocalSparkContext {
   val columnFamily = "c"
 
   override def beforeAll() {
+    
+    System.setProperty("spark.driver.allowMultipleContexts", "true")
+    
     htu = HBaseTestingUtility.createLocalHTU()
     
     htu.cleanupTestDir()
