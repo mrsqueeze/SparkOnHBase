@@ -196,6 +196,38 @@ class HBaseContext(@transient sc: SparkContext,
         }))
   }
   
+  
+    /**
+   * A simple abstraction over the HBaseContext.foreachPartition method.
+   *
+   * It allow addition support for a user to take RDD
+   * and generate puts and send them to HBase.
+   * The complexity of managing the HConnection is
+   * removed from the developer
+   *
+   * @param RDD       Original RDD with data to iterate over
+   * @param tableName The name of the table to put into
+   * @param f         Function to convert a value in the RDD to a list of HBase Puts
+   * @param autoFlush If autoFlush should be turned on
+   */
+  def bulkPutList[T](rdd: RDD[T], tableName: String, f: (T) => List[Put], autoFlush: Boolean) {
+
+    rdd.foreachPartition(
+      it => hbaseForeachPartition[T](
+        broadcastedConf,
+        credentialsConf,
+        it,
+        (iterator, hConnection) => {
+          val htable = hConnection.getTable(tableName)
+          htable.setAutoFlush(autoFlush, true)
+          iterator.foreach(T => {
+            f(T).foreach(obj => htable.put(obj))
+          })
+          htable.flushCommits()
+          htable.close()
+        }))
+  }
+  
   /**
    * A simple abstraction over the HBaseContext.streamMapPartition method.
    *
@@ -217,6 +249,30 @@ class HBaseContext(@transient sc: SparkContext,
     autoFlush: Boolean) = {
     dstream.foreach((rdd, time) => {
       bulkPut(rdd, tableName, f, autoFlush)
+    })
+  }
+  
+    /**
+   * A simple abstraction over the HBaseContext.streamMapPartition method.
+   *
+   * It allow addition support for a user to take a DStream and
+   * generate puts and send them to HBase.
+   *
+   * The complexity of managing the HConnection is
+   * removed from the developer
+   *
+   * @param DStream    Original DStream with data to iterate over
+   * @param tableName  The name of the table to put into
+   * @param f          Function to convert a value in 
+   *                   the DStream to a list of HBase puts
+   * @autoFlush        If autoFlush should be turned on
+   */
+  def streamBulkPutList[T](dstream: DStream[T],
+    tableName: String,
+    f: (T) => List[Put],
+    autoFlush: Boolean) = {
+    dstream.foreach((rdd, time) => {
+      bulkPutList(rdd, tableName, f, autoFlush)
     })
   }
   
